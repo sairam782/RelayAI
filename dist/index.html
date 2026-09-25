@@ -1,3 +1,115 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relay — Your client coordinator</title><meta name="description" content="An interactive prototype for managing client inquiries, meetings, and follow-ups."><link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23544ce4'/%3E%3Cpath d='M9 9h9a5 5 0 010 10h-3l8 5M9 9v15' stroke='white' stroke-width='3' fill='none'/%3E%3C/svg%3E"><link rel="stylesheet" href="styles.css"><script src="app.js" defer></script></head>
-<body><aside class="sidebar"><a class="brand" href="#today"><span class="brand-mark">r</span>relay<span class="ai-label">AI</span></a><div class="workspace"><span class="avatar">NS</span><div><strong>Northstar Studio</strong><small>Consulting & strategy</small></div></div><div class="nav-label">WORKSPACE</div><nav id="nav" aria-label="Main navigation"></nav><div class="sidebar-bottom"><div class="assistant-status"><span class="spark">✧</span><strong>Your coordinator is ready</strong><p>Replies and follow-ups await your review.</p></div><button class="profile" data-view="settings"><span class="avatar">AC</span><span><strong>Alex Carter</strong><small>Workspace owner</small></span><span>⚙</span></button></div></aside><div class="app"><header class="topbar"><div id="breadcrumb">Workspace <span>/</span> Today</div><div class="top-actions"><span class="demo-badge">Interactive demo</span><span class="top-date">Thu, Sep 24, 2026</span><button class="reset-button" id="reset">Reset demo</button></div></header><div class="demo-notice">Sample workspace · Replies, bookings, and AI suggestions are simulated. Changes last until you refresh.</div><main id="main"><div class="page-heading"><div><div class="eyebrow">YOUR DAILY BRIEF</div><h1>A little less busy.<br><span>A lot more momentum.</span></h1><p>Good morning, Alex. Let’s keep your next clients moving.</p></div><button class="button primary">Review suggestions <span>↗</span></button></div><section class="metrics"><article><span>Open opportunities</span><strong>8 <small>clients in motion</small></strong></article><article><span>Pipeline value</span><strong>$58,500 <small>potential project fees</small></strong></article><article><span>Needs your approval</span><strong>3 <small>ready-to-send drafts</small></strong></article></section><section class="panel"><div class="panel-head"><h2>Your next best moves</h2><span class="pill">3 suggestions</span></div><div class="initial-row"><span class="avatar purple">MC</span><div><strong>Maya Chen · Bloom & Co</strong><p>A new inquiry is ready for your reply.</p></div><button class="button">Review reply</button></div></section></main><footer>Relay · Your client coordinator <span>Prototype / September 2026</span></footer></div><dialog id="modal" aria-labelledby="modal-title"></dialog><div id="toast" role="status" aria-live="polite"></div></body></html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Relay — the client coordinator for small firms</title>
+<meta name="description" content="The average B2B inquiry waits 42 hours for a reply. Relay reads every inbound inquiry, drafts the response in your voice, and books the call — with you approving everything.">
+<meta property="og:title" content="Relay — the client coordinator for small firms">
+<meta property="og:description" content="78% of clients hire whoever replies first. The average B2B inquiry waits 42 hours. Relay closes that gap for firms too small to hire an SDR.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="og.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23544ce4'/%3E%3Cpath d='M9 9h9a5 5 0 010 10h-3l8 5M9 9v15' stroke='white' stroke-width='3' fill='none'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="landing.css">
+</head>
+<body>
+<header class="site-head">
+  <a class="brand" href="./"><span class="brand-mark">r</span>relay<span class="ai-label">AI</span></a>
+  <nav><a href="#how">How it works</a><a href="#market">Market</a><a href="#status">Status</a><a class="cta small" href="app.html">Open the prototype ↗</a></nav>
+</header>
+
+<section class="hero">
+  <div class="hero-copy">
+    <span class="kicker">CLIENT COORDINATOR FOR SMALL FIRMS</span>
+    <h1>Your next client hires<br>whoever answers first.</h1>
+    <p>The average B2B inquiry waits <b>42 hours</b> for a reply, and <b>78%</b> of buyers go with the first responder. Relay reads every inbound inquiry, drafts the response in your voice, and offers your real open times — then waits for you to approve it.</p>
+    <div class="hero-actions">
+      <a class="cta" href="app.html">Open the live prototype ↗</a>
+      <a class="ghost" href="app.html#impact">See the revenue math →</a>
+    </div>
+    <span class="micro">Working prototype. No signup, nothing to install.</span>
+  </div>
+  <div class="hero-card" aria-hidden="true">
+    <div class="card-row"><span class="dot"></span><strong>New inquiry · Tandem Health</strong><em>0m 04s ago</em></div>
+    <p class="quote">“We need brand positioning sorted before a Q1 launch and have about $14,000 set aside. Do you have time this week?”</p>
+    <div class="read"><span class="spark">✧</span> Relay's read
+      <div class="chips"><span><b>Service</b>Brand positioning</span><span><b>Budget</b>$14,000</span><span><b>Timeline</b>Q1</span></div>
+    </div>
+    <div class="draft"><span>Drafted reply · awaiting your approval</span><p>Hi Priya, thank you for getting in touch. Brand positioning ahead of a Q1 launch is very much the kind of work we do…</p></div>
+    <div class="card-foot"><span class="approve">Approve &amp; send</span><span class="muted">You decide. Always.</span></div>
+  </div>
+</section>
+
+<section class="proof">
+  <article><strong>42 hrs</strong><span>Average B2B lead response time</span></article>
+  <article><strong>78%</strong><span>Of buyers purchase from the first responder</span></article>
+  <article><strong>73%</strong><span>Of inbound leads are never contacted at all</span></article>
+  <article><strong>42,129</strong><span>US marketing-consulting firms with under 5 staff</span></article>
+</section>
+
+<section class="band" id="problem">
+  <h2>The firms with the worst response times are the ones nobody builds for.</h2>
+  <div class="cols">
+    <div><h3>AI SDR platforms</h3><p>Built for outbound at volume and enterprise contracts — one raised $74M on that thesis. They generate pipeline; they don't answer the inquiry already sitting in your inbox.</p></div>
+    <div><h3>Client-management suites</h3><p>HoneyBook, Dubsado and Moxie run $12–$129 a month and handle proposals, contracts and invoices. All of it happens <em>after</em> someone replies.</p></div>
+    <div class="fill"><h3>The gap</h3><p>A three-person consultancy can't hire an SDR and won't buy enterprise software. They lose deals to silence — while they're in a client meeting. That's the seat Relay takes.</p></div>
+  </div>
+</section>
+
+<section class="band light" id="how">
+  <span class="kicker dark">HOW IT WORKS</span>
+  <h2>Three steps, one hard rule.</h2>
+  <div class="steps">
+    <article><span class="num">1</span><h3>It reads</h3><p>Every inbound message is parsed for budget, timeline, service line and intent — then checked against the minimum project size you set.</p></article>
+    <article><span class="num">2</span><h3>It drafts</h3><p>A reply in your tone that names their goal, handles the budget question honestly, asks your qualifying questions, and offers two times you actually have free.</p></article>
+    <article><span class="num">3</span><h3>You approve</h3><p>Nothing sends on its own. The draft waits in your queue, you edit a line if you want, and you press send.</p></article>
+  </div>
+  <div class="rule"><strong>The hard rule:</strong> a client's email is data, never an instruction. Relay reads what they wrote; it never does what a message tells it to do. That's what makes an approval gate worth having.</div>
+</section>
+
+<section class="band" id="market">
+  <span class="kicker">THE MARKET</span>
+  <h2>50,025 firms in one US category alone — and 84% of them have fewer than five people.</h2>
+  <div class="cols">
+    <div><h3>Who pays</h3><p>Solo consultants and micro-agencies already spending $12–$129 a month on client tooling that doesn't respond for them. Relay slots into a budget line that exists.</p></div>
+    <div><h3>Why now</h3><p>Drafting a competent, context-aware reply became cheap and good enough in the last eighteen months. The approval gate makes it safe to sell to people whose reputation is the product.</p></div>
+    <div><h3>Where it grows</h3><p>Answer first, then own the relationship: proposals, follow-up cadence, scheduling, renewals. The inbox is the wedge, not the ceiling.</p></div>
+  </div>
+</section>
+
+<section class="band light" id="status">
+  <span class="kicker dark">HONEST STATUS</span>
+  <h2>What works today, and what's next.</h2>
+  <div class="cols status-cols">
+    <div class="works"><h3>Working in the prototype</h3><ul>
+      <li>Inbound message parsing — budget, timeline, service, intent, fit</li>
+      <li>Draft generation in three configurable tones</li>
+      <li>Real availability lookup and conflict-checked booking</li>
+      <li>Calendar file (.ics) export and mail-client handoff</li>
+      <li>Pipeline stages, analytics and follow-up queue</li>
+      <li>The revenue model, editable with your own numbers</li>
+    </ul></div>
+    <div class="next"><h3>Next build steps</h3><ul>
+      <li>Model-backed drafting behind the same approval gate</li>
+      <li>Gmail and Outlook OAuth for real inbound and sending</li>
+      <li>Google / Microsoft calendar sync</li>
+      <li>Accounts, workspaces and billing</li>
+      <li>Background follow-up scheduling</li>
+    </ul></div>
+  </div>
+  <p class="disclosure">Plain about the boundaries: the drafting engine in this prototype is deterministic rules running in your browser, not a live model. Client data is fictional. Nothing is emailed, no calendar is connected, and changes save only to your own browser. The architecture is built so that one function gets swapped for a model call — the approval gate, the parsing contract and the UI stay exactly as they are.</p>
+</section>
+
+<section class="closer">
+  <h2>Answer first. Keep the client.</h2>
+  <p>Click through the prototype the way a consultant would: let an inquiry land, watch it get read, approve the reply, book the call.</p>
+  <a class="cta big" href="app.html">Open the live prototype ↗</a>
+</section>
+
+<footer class="site-foot">
+  <div><strong>Relay</strong> · client coordinator prototype · September 2026</div>
+  <p class="sources">Benchmarks above are drawn from published 2026 speed-to-lead aggregations (<a href="https://greetnow.com/blog/lead-response-time-statistics" rel="nofollow noopener">lead response statistics</a>, <a href="https://leadresponse.co/blog/speed-to-lead-statistics" rel="nofollow noopener">speed-to-lead data</a>), US industry counts from <a href="https://www.anythingresearch.com/industry/Marketing-Consulting-Services.htm" rel="nofollow noopener">marketing-consulting industry statistics</a>, and competitor funding and positioning from public <a href="https://www.11x.ai/guides/artisan-vs-regie-ai-vs-11x" rel="nofollow noopener">category comparisons</a>. These are secondary sources, cited as directional — primary citations to follow.</p>
+</footer>
+</body></html>

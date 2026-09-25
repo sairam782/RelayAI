@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "relay-static",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/serve.js", "4317"],
+      "port": 4317
+    }
+  ]
+}
