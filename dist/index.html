@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Relay — the client coordinator for small firms</title>
-<meta name="description" content="The average B2B inquiry waits 42 hours for a reply. Relay reads every inbound inquiry, drafts the response in your voice, and books the call — with you approving everything.">
+<meta name="description" content="Meet Relay: an AI client coordinator for small consultancies and agencies. Watch the product walkthrough, then try inquiries, reply approvals, bookings, and follow-ups in the prototype.">
 <meta property="og:title" content="Relay — the client coordinator for small firms">
-<meta property="og:description" content="78% of clients hire whoever replies first. The average B2B inquiry waits 42 hours. Relay closes that gap for firms too small to hire an SDR.">
+<meta property="og:description" content="From first hello to the next meeting. See how Relay helps small teams manage inquiries, replies, meetings, and follow-ups, with an approval at every next step.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="og.png">
 <meta property="og:image:width" content="1200">
@@ -13,6 +13,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23544ce4'/%3E%3Cpath d='M9 9h9a5 5 0 010 10h-3l8 5M9 9v15' stroke='white' stroke-width='3' fill='none'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="landing.css">
+<script src="landing-demo.js" defer></script>
 </head>
 <body>
 <header class="site-head">
@@ -20,26 +21,35 @@
   <nav><a href="#how">How it works</a><a href="#market">Market</a><a href="#status">Status</a><a class="cta small" href="app.html">Open the prototype ↗</a></nav>
 </header>
 
-<section class="hero">
+<section class="hero" aria-labelledby="intro-title">
   <div class="hero-copy">
-    <span class="kicker">CLIENT COORDINATOR FOR SMALL FIRMS</span>
-    <h1>Your next client hires<br>whoever answers first.</h1>
-    <p>The average B2B inquiry waits <b>42 hours</b> for a reply, and <b>78%</b> of buyers go with the first responder. Relay reads every inbound inquiry, drafts the response in your voice, and offers your real open times — then waits for you to approve it.</p>
+    <span class="kicker">FOR SMALL CONSULTANCIES &amp; AGENCIES</span>
+    <h1 id="intro-title">From first hello<br>to the next meeting.</h1>
+    <p class="hero-summary">Relay is the AI client coordinator we’re building for small teams. It helps turn incoming inquiries into thoughtful replies, qualified conversations, and timely follow-ups — with you approving the next step.</p>
     <div class="hero-actions">
-      <a class="cta" href="app.html">Open the live prototype ↗</a>
-      <a class="ghost" href="app.html#impact">See the revenue math →</a>
+      <a class="cta" href="app.html">Try the interactive prototype ↗</a>
+      <a class="ghost" href="#walkthrough">Watch the 40-second walkthrough →</a>
     </div>
-    <span class="micro">Working prototype. No signup, nothing to install.</span>
+    <p class="hero-intent"><strong>The idea:</strong> you focus on the work your clients hired you to do. Relay keeps the next conversation from getting lost in your inbox.</p>
+    <span class="micro">Sample data and simulated AI. No signup required.</span>
   </div>
-  <div class="hero-card" aria-hidden="true">
-    <div class="card-row"><span class="dot"></span><strong>New inquiry · Tandem Health</strong><em>0m 04s ago</em></div>
-    <p class="quote">“We need brand positioning sorted before a Q1 launch and have about $14,000 set aside. Do you have time this week?”</p>
-    <div class="read"><span class="spark">✧</span> Relay's read
-      <div class="chips"><span><b>Service</b>Brand positioning</span><span><b>Budget</b>$14,000</span><span><b>Timeline</b>Q1</span></div>
+  <section class="demo-player" id="walkthrough" data-demo-player aria-label="Relay product walkthrough" hidden>
+    <div class="demo-topline"><strong>RELAY / THE PRODUCT IN 40 SECONDS</strong><span>Silent walkthrough</span></div>
+    <div class="demo-screen" data-demo-screen aria-hidden="true"></div>
+    <div class="demo-caption" aria-live="polite" aria-atomic="true"><h2 data-demo-title></h2><p data-demo-caption></p></div>
+    <div class="demo-controls">
+      <div class="demo-control-row"><button type="button" class="demo-play" data-demo-play>▶ Play walkthrough</button><span class="demo-time" data-demo-time>0:00 / 0:40</span><button type="button" class="demo-restart" data-demo-restart aria-label="Restart walkthrough">↺</button></div>
+      <input class="demo-seek" data-demo-seek type="range" min="0" max="40" step="0.1" value="0" aria-label="Walkthrough position">
+      <div class="demo-chapters" role="group" aria-label="Walkthrough chapters"><button type="button" data-demo-chapter aria-pressed="true">1. Inquiry</button><button type="button" data-demo-chapter aria-pressed="false">2. Qualify</button><button type="button" data-demo-chapter aria-pressed="false">3. Reply</button><button type="button" data-demo-chapter aria-pressed="false">4. Meet</button><button type="button" data-demo-chapter aria-pressed="false">5. Follow up</button></div>
     </div>
-    <div class="draft"><span>Drafted reply · awaiting your approval</span><p>Hi Priya, thank you for getting in touch. Brand positioning ahead of a Q1 launch is very much the kind of work we do…</p></div>
-    <div class="card-foot"><span class="approve">Approve &amp; send</span><span class="muted">You decide. Always.</span></div>
-  </div>
+    <details class="demo-transcript"><summary>Read the walkthrough</summary><ol><li>A client inquiry arrives while you’re busy with existing work.</li><li>Relay identifies the service, budget, and timeline to help you assess fit.</li><li>You review and edit a contextual reply before approving it.</li><li>You choose an available time and confirm a discovery call.</li><li>After a proposal, Relay prepares a follow-up for your review.</li></ol><a href="app.html">Now try the workflow yourself →</a></details>
+  </section>
+  <noscript><div class="hero-card"><h2>See the idea in five steps</h2><p style="color:#555970">Inquiry → qualification → approved reply → meeting → follow-up.</p><p style="color:#555970">Enable JavaScript to play the animated walkthrough and use the interactive prototype.</p></div></noscript>
+</section>
+<section class="demo-purpose" aria-label="What we are building">
+  <article><span>Who it’s for</span><h2>Small teams doing client work.</h2><p>Consultants and specialist agencies where the owner still manages new-business conversations.</p></article>
+  <article><span>What it helps with</span><h2>The work between conversations.</h2><p>Understanding inquiries, drafting replies, arranging meetings, and remembering the follow-up.</p></article>
+  <article><span>What this demonstrates</span><h2>The workflow, before live connections.</h2><p>This prototype uses fictional clients and simulated replies. Live AI, email, and calendar sync are the next build steps.</p></article>
 </section>
 
 <section class="proof">

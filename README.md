@@ -33,6 +33,10 @@ The product overview is served at `/`, the prototype at `/app`. After the first 
 change the two `og:image` / `twitter:image` tags in `dist/index.html` from the relative
 `og.png` to the full `https://<your-domain>/og.png`, so link previews resolve everywhere.
 
+## Product walkthrough
+
+The landing page opens with a silent, 40-second animated walkthrough of an inquiry, qualification, reply approval, meeting, and follow-up. It includes play/pause, replay, a seek bar, chapter controls, captions, and a text transcript. Playback starts only when requested and pauses when the browser tab is hidden.
+
 ## What the prototype does
 
 - **Reads an inbound message** for budget, timeline, service line, intent and fit against
@@ -66,6 +70,7 @@ Stated plainly, because the prototype is shown to people making decisions:
 ## Files
 
 - `dist/index.html`, `dist/landing.css` — product overview at `/`
+- `dist/landing-demo.js` — interactive product walkthrough (no video service required)
 - `dist/app.html` — prototype shell
 - `dist/app.js` — state, inference, views, actions (single file, no build)
 - `dist/styles.css` — app styles
