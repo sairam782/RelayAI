@@ -27,7 +27,15 @@ const isWeekend = s => [0, 6].includes(parseISO(s).getDay());
 const nextBiz = (s, n = 1) => { let d = s; for (let i = 0; i < n; i++) { do { d = addDays(d, 1); } while (isWeekend(d)); } return d; };
 const bizOrNext = s => isWeekend(s) ? nextBiz(s) : s;
 
-const TODAY = iso(new Date());
+const easternParts = (date = new Date()) => Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+}).formatToParts(date).filter(p => p.type !== 'literal').map(p => [p.type, p.value]));
+const easternDate = (date = new Date()) => { const p = easternParts(date); return `${p.year}-${p.month}-${p.day}`; };
+const TODAY = easternDate();
+const validDate = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(parseISO(s).getTime()) && iso(parseISO(s)) === s;
+const validTime = s => typeof s === 'string' && /^(09|1[0-6]):(00|30)$/.test(s);
+const pastSlot = (date, time) => { const p = easternParts(); return date < easternDate() || (date === easternDate() && time <= `${p.hour}:${p.minute}`); };
 /* Seeded meetings land on business days so the demo never opens onto a dead weekend. */
 const DESK = bizOrNext(TODAY);
 const mondayOf = s => { const d = parseISO(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return iso(d); };
@@ -60,8 +68,6 @@ const navs = [['today', 'Today'], ['inbox', 'Inbox'], ['pipeline', 'Client pipel
 const stages = ['New inquiry', 'Qualified', 'Meeting booked', 'Proposal sent', 'Won', 'Lost'];
 const stageOdds = { 'New inquiry': .1, 'Qualified': .25, 'Meeting booked': .45, 'Proposal sent': .65, 'Won': 1, 'Lost': 0 };
 
-/* Published benchmarks used by the impact model. Sources listed in the Impact view. */
-const BENCH = { industryHours: 42, firstResponderShare: .78, neverContacted: .73 };
 
 /* ---------- seed workspace ---------- */
 function seed() {
@@ -99,24 +105,80 @@ let view = 'today', selected = 1, inboxFilter = 'all', inboxQuery = '', weekOffs
 
 /* ---------- persistence ---------- */
 const STORE = 'relay.prototype.v2';
+/* Validate imported and saved data before replacing a working workspace. */
+function decodeWorkspace(raw) {
+  const fail = () => { throw Error('Invalid Relay workspace.'); };
+  const obj = value => value && typeof value === 'object' && !Array.isArray(value);
+  const str = (value, limit = 2000) => { if (typeof value !== 'string' || value.length > limit) fail(); return value; };
+  const num = (value, min = 0, max = 1000000) => { if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) fail(); return value; };
+  const id = value => { num(value, 1, Number.MAX_SAFE_INTEGER - 1); if (!Number.isSafeInteger(value)) fail(); return value; };
+  const date = value => { if (!validDate(value)) fail(); return value; };
+  if (!obj(raw) || !Array.isArray(raw.clients) || !raw.clients.length || raw.clients.length > 500) fail();
+  const ids = new Set();
+  const cleanClients = raw.clients.map(c => {
+    if (!obj(c) || ids.has(id(c.id)) || !stages.includes(c.stage)) fail();
+    ids.add(c.id);
+    if (!['purple', 'blue', 'pink', 'green', 'orange'].includes(c.color)) fail();
+    if (typeof c.need !== 'boolean' || !['reply', 'followup'].includes(c.kind)) fail();
+    if (!Array.isArray(c.sent) || c.sent.length > 500) fail();
+    const name = str(c.name, 80), company = str(c.company, 100);
+    if (!name.trim() || !company.trim()) fail();
+    const result = { id: c.id, name, company, initials: str(c.initials, 10), color: c.color,
+      email: str(c.email, 254), subject: str(c.subject, 300), message: str(c.message, 10000),
+      stage: c.stage, value: num(c.value), source: str(c.source, 100), ago: num(c.ago ?? 0, 0, 1e9),
+      kind: c.kind, due: date(c.due), need: c.need, note: str(c.note ?? '', 1000),
+      sent: c.sent.map(m => { if (!obj(m)) fail(); return { text: str(m.text, 20000) }; }),
+      draft: c.streaming ? '' : str(c.draft ?? '', 20000), streaming: false };
+    if (c.arrivedAt != null) result.arrivedAt = num(c.arrivedAt, 0, 1e15);
+    if (c.respondedSec != null) result.respondedSec = num(c.respondedSec, 0, 1e12);
+    return result;
+  });
+  if (!Array.isArray(raw.events) || raw.events.length > 1000) fail();
+  const eventIds = new Set(), bookedClients = new Set(), bookedSlots = new Set();
+  const cleanEvents = raw.events.map(e => {
+    if (!obj(e) || eventIds.has(id(e.id)) || !ids.has(e.client) || bookedClients.has(e.client)) fail();
+    date(e.date);
+    if (isWeekend(e.date) || !validTime(e.time) || e.duration !== 30 || bookedSlots.has(`${e.date} ${e.time}`)) fail();
+    eventIds.add(e.id); bookedClients.add(e.client); bookedSlots.add(`${e.date} ${e.time}`);
+    return { id: e.id, client: e.client, date: e.date, time: e.time, duration: 30, title: str(e.title, 100) };
+  });
+  const defaults = seed();
+  const prefs = raw.settings ?? defaults.settings;
+  if (!obj(prefs) || !['Warm and professional', 'Concise and direct', 'Friendly and conversational'].includes(prefs.tone)) fail();
+  const cleanSettings = { name: str(prefs.name, 80), owner: str(prefs.owner, 80), services: str(prefs.services, 500),
+    questions: str(prefs.questions, 600), minimum: num(prefs.minimum), tone: prefs.tone };
+  if (![cleanSettings.name, cleanSettings.owner, cleanSettings.services, cleanSettings.questions].every(x => x.trim())) fail();
+  const cleanRoi = {};
+  for (const [key, min, max] of [['inquiries',0,500],['fee',0,1000000],['close',0,100],['respondHours',0,336],['price',1,10000]]) {
+    cleanRoi[key] = num(raw.roi?.[key] ?? defaults.roi[key], min, max);
+  }
+  const items = raw.activity ?? [];
+  if (!Array.isArray(items) || items.length > 100) fail();
+  const cleanActivity = items.map(a => { if (!obj(a)) fail(); return { text: str(a.text, 1000), time: str(a.time, 100) }; });
+  const samples = raw.responses ?? defaults.responses;
+  if (!Array.isArray(samples) || samples.length > 10000) fail();
+  return { clients: cleanClients, events: cleanEvents, settings: cleanSettings, roi: cleanRoi, activity: cleanActivity,
+    responses: samples.map(n => num(n, 0, 1e10)), nextClient: Math.max(...ids) + 1,
+    nextEvent: Math.max(0, ...eventIds) + 1, selected: ids.has(raw.selected) ? raw.selected : cleanClients[0].id };
+}
+function applyWorkspace(data) {
+  streamToken++;
+  ({ clients, events, settings, roi, activity, responses, nextClient, nextEvent, selected } = data);
+}
 function save() {
   try {
-    localStorage.setItem(STORE, JSON.stringify({ day: TODAY, clients, events, settings, roi, activity, responses, nextClient, nextEvent, selected }));
-  } catch (_) { /* private mode, quota, blocked storage — the demo still works */ }
+    // Never persist a read-only animation state or an unfinished animated draft.
+    const snapshot = clients.map(c => c.streaming ? { ...c, streaming: false, draft: '' } : c);
+    localStorage.setItem(STORE, JSON.stringify({ day: TODAY, clients: snapshot, events, settings, roi, activity, responses, nextClient, nextEvent, selected }));
+  } catch (_) { /* Storage may be blocked; the in-memory demo still works. */ }
 }
 function load() {
   try {
     const raw = localStorage.getItem(STORE);
     if (!raw) return false;
-    const s = JSON.parse(raw);
-    if (!s || !Array.isArray(s.clients) || !s.clients.length) return false;
-    /* Seeded dates are relative to the day they were generated. If the saved
-       workspace is from another day, start fresh rather than show stale dates. */
-    if (s.day !== TODAY) return false;
-    clients = s.clients; events = s.events || []; settings = { ...settings, ...s.settings };
-    roi = { ...roi, ...s.roi }; activity = s.activity || []; responses = s.responses || responses;
-    nextClient = s.nextClient || clients.length + 1; nextEvent = s.nextEvent || events.length + 1;
-    selected = s.selected || clients[0].id;
+    const data = JSON.parse(raw);
+    if (data?.day !== TODAY) return false;
+    applyWorkspace(decodeWorkspace(data));
     return true;
   } catch (_) { return false; }
 }
@@ -148,8 +210,8 @@ function log(text) {
 function slotsFor(date, ignoreId) {
   const all = [];
   for (let h = 9; h < 17; h++) for (const m of ['00', '30']) all.push(`${pad(h)}:${m}`);
-  if (isWeekend(date)) return [];
-  return all.filter(t => !events.some(e => e.id !== ignoreId && e.date === date && e.time === t));
+  if (!validDate(date) || isWeekend(date)) return [];
+  return all.filter(t => !pastSlot(date, t) && !events.some(e => e.id !== ignoreId && e.date === date && e.time === t));
 }
 function nextSlots(count = 2) {
   const out = [];
@@ -157,7 +219,7 @@ function nextSlots(count = 2) {
   /* One slot per day: two options on two different days reads better in a
      reply than two times on the same afternoon. */
   for (let i = 0; i < 10 && out.length < count; i++) {
-    const free = slotsFor(day).filter(t => !(day === TODAY && t <= '11:00'));
+    const free = slotsFor(day);
     if (free.length) out.push({ date: day, time: free[0] });
     day = nextBiz(day);
   }
@@ -221,7 +283,7 @@ function readIntent(text) {
 }
 function analyze(c) {
   const text = `${c.subject} ${c.message}`;
-  const budget = readBudget(text) ?? (c.value || null);
+  const budget = readBudget(text); // Opportunity value is an estimate, not a budget the client stated.
   const timeline = readTimeline(text);
   const service = bestService(text);
   const intent = readIntent(text);
@@ -235,8 +297,7 @@ function analyze(c) {
   return {
     budget, timeline, intent, fits,
     service: service?.label || null,
-    signals,
-    confidence: Math.min(94, 58 + signals.length * 9)
+    signals
   };
 }
 
@@ -250,7 +311,7 @@ function remainingQuestions(a) {
     if (a.timeline && /timeline|timing|when |deadline/.test(t)) return false;
     return true;
   });
-  return (keep.length ? keep : asked).join(' ');
+  return keep.join(' ');
 }
 
 /* Composes the reply from the reading above plus the owner's own preferences. */
@@ -265,14 +326,14 @@ function draftFor(c) {
   }[settings.tone] || `Hi ${first}, thank you for getting in touch.`;
 
   const parts = [opener];
-  if (a.service && a.timeline?.rush) parts[0] += ` ${a.service} is very much what we do at ${settings.name}, and we can move quickly on it.`;
+  if (a.service && a.timeline?.rush) parts[0] += ` ${a.service} is very much what we do at ${settings.name}, and I’d like to confirm the scope before committing to your timing.`;
   else if (a.service && a.timeline && a.timeline.urgency !== 'low') parts[0] += ` ${a.service} ahead of ${a.timeline.phrase} is very much the kind of work we do at ${settings.name}.`;
   else if (a.service && a.timeline) parts[0] += ` ${a.service} is core to what we do at ${settings.name}, and ${a.timeline.phrase} gives us room to scope it properly.`;
   else if (a.service) parts[0] += ` ${a.service} is core to what we do at ${settings.name}.`;
   else parts[0] += ` At ${settings.name}, we help clients with ${settings.services.toLowerCase()}.`;
 
-  if (a.budget != null && a.fits) parts.push(`The ${money(a.budget)} you mentioned sits inside our usual project range, so scope shouldn’t be the sticking point.`);
-  else if (a.budget != null) parts.push(`One note on budget: our engagements typically start at ${money(settings.minimum)}. If ${money(a.budget)} is firm, I can put together a tighter scope that still moves the needle for you.`);
+  if (a.budget != null && a.fits) parts.push(`The ${money(a.budget)} you mentioned is above our ${money(settings.minimum)} starting budget. We can confirm the fee once we agree the scope.`);
+  else if (a.budget != null) parts.push(`One note on budget: our engagements typically start at ${money(settings.minimum)}. Is there flexibility in the ${money(a.budget)} budget? We can discuss whether a smaller engagement is possible.`);
 
   if (a.intent === 'Proposal feedback') parts.push('Happy to walk through any part of the proposal, or to answer questions from whoever else is weighing in.');
   else parts.push(remainingQuestions(a));
@@ -293,9 +354,7 @@ const simulateButton = (cls = 'button primary') => `<button class="${cls}" data-
 
 function speedTile() {
   const mins = median(responses);
-  const industryMin = BENCH.industryHours * 60;
-  const pct = Math.max(2, Math.min(100, (mins / industryMin) * 100));
-  return `<article class="metric-speed"><span>Median first response ${icon('followups')}</span><strong>${mins < 1 ? '<1' : Math.round(mins)} min<small>vs ${BENCH.industryHours} hr B2B average</small></strong><div class="speed-bars"><i class="you" style="width:${pct}%"></i><i class="them"></i></div></article>`;
+  return `<article class="metric-speed"><span>Median first response ${icon('followups')}</span><strong>${mins < 1 ? '<1' : Math.round(mins)} min<small>sample history and demo approvals</small></strong></article>`;
 }
 
 function todayView() {
@@ -306,7 +365,7 @@ function todayView() {
 <div class="dashboard-grid"><div><section class="panel"><div class="panel-head"><h2>Your next best moves</h2><span class="pill">✧ Prepared by Relay</span></div>${pending.length ? pending.map(c => `<div class="move-row">${avatar(c)}<div><div class="row-title">${esc(c.name)} <span>· ${esc(c.company)}</span></div><p>${c.kind === 'followup' ? 'Keep the conversation going on your proposal.' : c.stage === 'Qualified' ? 'A good-fit client is ready for the next step.' : 'A new inquiry is ready for your reply.'}</p><div class="row-meta"><span>${c.kind === 'followup' ? 'Proposal follow-up' : 'Suggested reply'}</span><span>${money(c.value)} opportunity</span><span>${esc(agoLabel(c.ago))}</span></div></div><button class="button small" data-review="${c.id}">Review ${c.kind === 'followup' ? 'follow-up' : 'reply'} <span>↗</span></button></div>`).join('') : '<div class="empty">✓ All caught up.<p>Today’s replies and follow-ups are taken care of.</p></div>'}</section>
 <section class="panel activity-panel"><div class="panel-head"><h2>Recent activity</h2><span class="muted text-small">Today</span></div>${activity.slice(0, 4).map(a => `<div class="activity-row"><span class="activity-check">✓</span><span>${esc(a.text)}</span><small>${esc(a.time)}</small></div>`).join('') || '<div class="empty">Nothing logged yet today.</div>'}</section></div>
 <aside><section class="panel schedule-panel"><div class="panel-head"><h2>On your calendar</h2><button class="icon-button" data-view="calendar" aria-label="Open calendar">↗</button></div><div class="calendar-date"><span>${Number(TODAY.slice(-2))}</span><div>${dayName(TODAY)}<small>${parseISO(TODAY).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} · Eastern</small></div></div>${today.map(eventRow).join('') || `<div class="empty">A clear calendar today.${isWeekend(TODAY) ? '<p>It’s the weekend — this week’s meetings are on the calendar.</p>' : ''}</div>`}<button class="button wide subtle" data-view="calendar">View full calendar →</button></section>
-<section class="insight"><div class="eyebrow">WHY SPEED WINS</div><h2>${Math.round(BENCH.firstResponderShare * 100)}% of clients<br>hire the first reply.</h2><p>The average B2B inquiry waits ${BENCH.industryHours} hours.<br>Relay answers while you’re still in a meeting.</p><button class="text-button light" data-view="impact">See the math ↗</button></section></aside></div>`;
+<section class="insight"><div class="eyebrow">KEEP THE CONVERSATION MOVING</div><h2>A useful reply.<br>A clear next step.</h2><p>Relay prepares the follow-through.<br>You review and approve it.</p><button class="text-button light" data-view="impact">See the math ↗</button></section></aside></div>`;
 }
 
 function eventRow(e) {
@@ -324,15 +383,15 @@ function inboxView() {
 function conversation(c) {
   if (!c.draft && !c.sent.length && !c.streaming) c.draft = draftFor(c);
   const a = analyze(c);
-  const read = `<div class="read-panel ${c.streaming ? 'is-working' : ''}"><div class="read-head"><span class="spark">✧</span><strong>Relay’s read of this message</strong><span class="pill ${a.fits === false ? '' : 'green'}">${a.confidence}% confidence</span></div><div class="read-chips">${a.signals.map(s => `<span class="chip ${s.tone || ''}"><b>${esc(s.label)}</b>${esc(s.value)}</span>`).join('')}</div></div>`;
+  const read = `<div class="read-panel ${c.streaming ? 'is-working' : ''}"><div class="read-head"><span class="spark">✧</span><strong>Relay’s read of this message</strong><span class="pill ${a.fits === false ? '' : 'green'}">Rule-based reading</span></div><div class="read-chips">${a.signals.map(s => `<span class="chip ${s.tone || ''}"><b>${esc(s.label)}</b>${esc(s.value)}</span>`).join('')}</div></div>`;
   const timer = c.respondedSec != null
-    ? `<div class="sla sla-done">✓ Answered in ${c.respondedSec < 60 ? `${Math.round(c.respondedSec)} seconds` : `${Math.round(c.respondedSec / 60)} min`} · the B2B average is ${BENCH.industryHours} hours</div>`
+    ? `<div class="sla sla-done">✓ Answered in ${c.respondedSec < 60 ? `${Math.round(c.respondedSec)} seconds` : `${Math.round(c.respondedSec / 60)} min`} · simulated reply</div>`
     : c.arrivedAt ? `<div class="sla"><span class="live-dot"></span>Inbound inquiry · <span id="sla-timer">0s</span> since it landed</div>` : '';
   return `<div class="conversation-head"><div>${avatar(c)}<div><h2>${esc(c.name)}</h2><p>${esc(c.email)}</p></div></div><button class="button small" data-book="${c.id}">${events.some(e => e.client === c.id) ? 'Manage meeting' : 'Book meeting'}</button></div>
 <div class="client-context">${badge(c)}<span>${money(c.value)} opportunity</span><button class="text-button" data-client="${c.id}">View client ↗</button></div>${timer}
 <div class="messages"><div class="message-heading">${esc(c.subject)}</div><div class="message"><div class="message-label">${esc(c.name)} <span>${esc(agoLabel(c.ago))}</span></div><p>${esc(c.message)}</p></div>${c.sent.map(s => `<div class="message outgoing"><div class="message-label">${esc(settings.owner)} <span>Approved by you</span></div><p>${esc(s.text)}</p></div>`).join('')}</div>
 ${read}
-<div class="composer"><div class="composer-head"><span class="spark">✧</span><strong>${c.sent.length ? 'Write another reply' : 'Suggested reply'}</strong><span class="pill">${esc(settings.tone)}</span></div>${c.streaming ? '<div class="stream-status" id="stream-status" role="status">Reading the message…</div>' : ''}<textarea id="reply-text" aria-label="Reply draft" rows="8" ${c.streaming ? 'readonly' : ''}>${esc(c.draft)}</textarea><div class="composer-footer"><span>Nothing leaves this prototype until you approve it.</span><div class="footer-actions"><button class="button" data-mailto="${c.id}" ${c.streaming ? 'disabled' : ''}>Open in mail app</button><button class="button primary" data-send="${c.id}" ${c.streaming ? 'disabled' : ''}>Approve & send ↗</button></div></div></div>`;
+<div class="composer"><div class="composer-head"><span class="spark">✧</span><strong>${c.sent.length ? 'Write another reply' : 'Suggested reply'}</strong><span class="pill">${esc(settings.tone)}</span></div>${c.streaming ? '<div class="stream-status" id="stream-status" role="status">Reading the message…</div>' : ''}<textarea id="reply-text" aria-label="Reply draft" rows="8" ${c.streaming ? 'readonly' : ''}>${esc(c.draft)}</textarea><div class="composer-footer"><span>Approval records a demo reply. Use your mail app to send it.</span><div class="footer-actions"><button class="button" data-mailto="${c.id}" ${c.streaming ? 'disabled' : ''}>Open in mail app</button><button class="button primary" data-send="${c.id}" ${c.streaming ? 'disabled' : ''}>Approve & send ↗</button></div></div></div>`;
 }
 
 function pipelineView() {
@@ -361,13 +420,10 @@ function calendarView() {
 
 function followupsView() {
   const list = clients.filter(c => c.kind === 'followup' && c.need && live(c)).sort((a, b) => a.due.localeCompare(b.due));
-  return heading('A thoughtful nudge goes a long way.', 'Keep proposals moving without keeping it all in your head.') + `<div class="followup-intro"><span class="spark">✧</span><div><strong>You set the pace. Relay prepares the words.</strong><p>Every follow-up stays in your review queue until you approve it. Up to ${Math.round(BENCH.neverContacted * 100)}% of inbound leads are never contacted at all — this is the queue that stops that happening.</p></div></div><section class="panel"><div class="panel-head"><h2>Upcoming follow-ups</h2><span class="pill">${list.length} waiting</span></div>${list.map(c => `<div class="followup-row">${avatar(c)}<div class="followup-client"><h3>${esc(c.company)}</h3><p>${esc(c.name)} · ${money(c.value)} proposal</p></div><div class="followup-preview"><strong>${c.due <= TODAY ? 'Due today' : prettyDate(c.due)}</strong><p>${esc(c.draft)}</p></div><div class="row-actions"><button class="button small" data-snooze="${c.id}">Snooze</button><button class="button primary small" data-review="${c.id}">Review draft ↗</button></div></div>`).join('') || '<div class="empty">All follow-ups are up to date.<p>Your next conversations are waiting in the inbox.</p></div>'}</section>`;
+  return heading('A thoughtful nudge goes a long way.', 'Keep proposals moving without keeping it all in your head.') + `<div class="followup-intro"><span class="spark">✧</span><div><strong>You set the pace. Relay prepares the words.</strong><p>Every follow-up stays in your review queue until you approve it. Keep the next step visible without relying on memory.</p></div></div><section class="panel"><div class="panel-head"><h2>Upcoming follow-ups</h2><span class="pill">${list.length} waiting</span></div>${list.map(c => `<div class="followup-row">${avatar(c)}<div class="followup-client"><h3>${esc(c.company)}</h3><p>${esc(c.name)} · ${money(c.value)} proposal</p></div><div class="followup-preview"><strong>${c.due <= TODAY ? 'Due today' : prettyDate(c.due)}</strong><p>${esc(c.draft)}</p></div><div class="row-actions"><button class="button small" data-snooze="${c.id}">Snooze</button><button class="button primary small" data-review="${c.id}">Review draft ↗</button></div></div>`).join('') || '<div class="empty">All follow-ups are up to date.<p>Your next conversations are waiting in the inbox.</p></div>'}</section>`;
 }
 
-/* ---------- impact model ----------
-   Deliberately conservative: it does NOT claim faster replies lift your close
-   rate. It models only the share of inbound that is lost purely to waiting,
-   recovers that share, and applies your own close rate to it. */
+/* ---------- illustrative impact scenario (unvalidated recovery assumptions) ---------- */
 function lossShare(hours) {
   if (hours <= 5 / 60) return 0;
   if (hours <= 0.5) return 0.03;
@@ -381,8 +437,8 @@ function impactNumbers() {
   const close = Math.min(100, Math.max(0, Number(roi.close) || 0)) / 100;
   const hours = Math.max(0, Number(roi.respondHours) || 0);
   const price = Math.max(1, Number(roi.price) || 1);
-  const nowWins = inq * close;
   const recovered = inq * lossShare(hours);
+  const nowWins = (inq - recovered) * close;
   const gain = recovered * close;
   const monthly = gain * fee;
   return {
@@ -400,17 +456,21 @@ const cadenceLabel = n => !n.gain ? 'No delay to recover — you already answer 
 
 function impactView() {
   const n = impactNumbers();
-  const field = (key, label, attrs) => `<label>${label}<input data-roi="${key}" type="number" value="${roi[key]}" ${attrs}></label>`;
-  return heading('The cost of answering late.', 'Your numbers, run against published speed-to-lead benchmarks.') + `
-<div class="impact-layout"><section class="panel"><div class="panel-head"><h2>Your inputs</h2><span class="pill">Editable</span></div><div class="form-body"><div class="form-grid">${field('inquiries', 'Inbound inquiries per month', 'min="0" max="500"')}${field('fee', 'Average project fee ($)', 'min="0" max="1000000" step="500"')}</div><div class="form-grid">${field('close', 'Your close rate on inquiries you reach (%)', 'min="0" max="100"')}${field('respondHours', 'Your typical response time (hours)', 'min="0" max="336" step="0.5"')}</div>${field('price', 'Relay price per month ($)', 'min="1" max="10000"')}<p class="text-small muted">The B2B baseline is ${BENCH.industryHours} hours; ${Math.round(BENCH.firstResponderShare * 100)}% of buyers purchase from whoever replies first. Adjust anything here — the model updates as you type.</p></div></section>
-<section class="panel impact-out"><div class="panel-head"><h2>Modelled outcome</h2><span class="pill green" id="roi-multiple">${n.roi >= 1 ? `${Math.round(n.roi)}× the subscription` : 'Below subscription cost'}</span></div><div class="form-body"><div class="impact-compare"><div class="impact-col"><span>Projects won today</span><strong id="roi-now">${n.nowWins.toFixed(1)}</strong><small>per month</small></div><div class="impact-arrow">→</div><div class="impact-col win"><span>Answering within 5 minutes</span><strong id="roi-relay">${n.relayWins.toFixed(1)}</strong><small>per month</small></div></div>
-<div class="impact-headline"><span>Recovered from inquiries that currently go cold</span><strong id="roi-monthly">${money(n.monthly)}<small> / month</small></strong><b id="roi-annual">${money(n.annual)} a year · ${cadenceLabel(n)}</b></div>
-<p class="text-small muted">Conservative by design: this does not assume faster replies improve your close rate. It recovers only the ${Math.round(lossShare(n.hours) * 100)}% of inbound that research attributes to waiting at a ${n.hours >= 1 ? n.hours + '-hour' : Math.round(n.hours * 60) + '-minute'} response time, then applies your own ${Math.round(n.close * 100)}% close rate to it. Illustrative, not a guarantee.</p></div></section></div>
-<section class="panel sources"><div class="panel-head"><h2>Where the benchmarks come from</h2></div><div class="form-body"><ul class="source-list"><li>Average B2B lead response time of ~${BENCH.industryHours} hours, and ${Math.round(BENCH.firstResponderShare * 100)}% of customers buying from the first responder — published speed-to-lead aggregations, 2026.</li><li>Sharp conversion decay between a 5-minute and a 30-minute reply, and up to ${Math.round(BENCH.neverContacted * 100)}% of leads never contacted at all — lead-response statistics, 2026.</li><li>Market sizing: 50,025 US marketing-consulting establishments, 84% with fewer than five staff.</li><li>These are secondary aggregations, cited as directional. Primary citations to follow.</li></ul></div></section>`;
+  const field = (key, label, attrs) => `<label>${label}<input data-roi="${key}" type="number" value="${esc(roi[key])}" ${attrs}></label>`;
+  return heading('Explore a possible business case.', 'An illustrative scenario with assumed recovery rates, not measured Relay results.') + `
+<div class="impact-layout"><section class="panel"><div class="panel-head"><h2>Your inputs</h2><span class="pill">Editable</span></div><div class="form-body"><div class="form-grid">${field('inquiries', 'Inbound inquiries per month', 'min="0" max="500"')}${field('fee', 'Average project fee ($)', 'min="0" max="1000000" step="500"')}</div><div class="form-grid">${field('close', 'Your close rate on inquiries you reach (%)', 'min="0" max="100"')}${field('respondHours', 'Your typical response time (hours)', 'min="0" max="336" step="0.5"')}</div>${field('price', 'Relay price per month ($)', 'min="1" max="10000"')}<p class="text-small muted">These are editable sample inputs. Subscription pricing is a planning assumption, not an offer. The calculation excludes delivery costs and does not predict actual revenue.</p></div></section>
+<section class="panel impact-out"><div class="panel-head"><h2>Modelled outcome</h2><span class="pill green" id="roi-multiple">${n.roi >= 1 ? `${Math.round(n.roi)}× the subscription` : 'Below subscription cost'}</span></div><div class="form-body"><div class="impact-compare"><div class="impact-col"><span>With assumed delays</span><strong id="roi-now">${n.nowWins.toFixed(1)}</strong><small>per month</small></div><div class="impact-arrow">→</div><div class="impact-col win"><span>If all delayed leads are recovered</span><strong id="roi-relay">${n.relayWins.toFixed(1)}</strong><small>per month</small></div></div>
+<div class="impact-headline"><span>Illustrative additional gross project fees</span><strong id="roi-monthly">${money(n.monthly)}<small> / month</small></strong><b id="roi-annual">${money(n.annual)} a year · ${cadenceLabel(n)}</b></div>
+<p class="text-small muted" id="roi-assumptions">${esc(impactAssumptions(n))}</p></div></section></div>
+<section class="panel sources"><div class="panel-head"><h2>How this scenario works</h2></div><div class="form-body"><ul class="source-list"><li>Assumed share of inquiries lost to delay: 0% at 5 minutes or less, 3% up to 30 minutes, 8% up to 4 hours, 14% up to 24 hours, and 18% beyond 24 hours.</li><li>These rates are illustrative product assumptions, not research findings or measured conversion improvements.</li><li>Additional fees = inquiries × assumed lost share × close rate × project fee. This assumes every delayed inquiry is recovered.</li><li>Validate these assumptions with pilot customers before using the calculation to make a business decision.</li></ul></div></section>`;
+}
+function impactAssumptions(n) {
+  return `This scenario assumes ${Math.round(lossShare(n.hours) * 100)}% of inquiries are lost to delay and all are recovered, with a ${Math.round(n.close * 100)}% close rate. These are illustrative assumptions, not a guarantee or research-derived forecast.`;
 }
 function paintImpact() {
   const n = impactNumbers();
   const set = (sel, text) => { const el = $(sel); if (el) el.textContent = text; };
+  set('#roi-assumptions', impactAssumptions(n));
   set('#roi-now', n.nowWins.toFixed(1));
   set('#roi-relay', n.relayWins.toFixed(1));
   set('#roi-annual', `${money(n.annual)} a year · ${cadenceLabel(n)}`);
@@ -493,7 +553,6 @@ function approveReply(id, text) {
     c.respondedSec = (Date.now() - c.arrivedAt) / 1000;
     responses.push(Math.max(0.2, c.respondedSec / 60));
   }
-  if (c.stage === 'New inquiry') c.stage = 'Qualified';
   log(`Reply approved for ${c.company}`);
   render();
   return { clientId: c.id, status: 'recorded_in_prototype', externalMessageSent: false, respondedSec: c.respondedSec ?? null };
@@ -502,9 +561,10 @@ function book(data) {
   const c = find(data.client);
   const existing = events.find(e => e.id === Number(data.event));
   if (!c) throw Error('Choose a client.');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(data.date) || data.date < TODAY || data.date > MAX_DATE) throw Error(`Choose a date between ${prettyDate(TODAY)} and ${prettyDate(MAX_DATE)}.`);
+  if (!validDate(data.date) || data.date < TODAY || data.date > MAX_DATE) throw Error(`Choose a date between ${prettyDate(TODAY)} and ${prettyDate(MAX_DATE)}.`);
   if (isWeekend(data.date)) throw Error('Meetings are available Monday through Friday.');
-  if (!/^(09|1[0-6]):(00|30)$/.test(data.time)) throw Error('Choose an available time.');
+  if (!validTime(data.time)) throw Error('Choose an available time.');
+  if (pastSlot(data.date, data.time)) throw Error('Choose a future time.');
   if (events.some(e => e.id !== existing?.id && e.date === data.date && e.time === data.time)) throw Error('That time has been booked. Choose another.');
   if (!data.title.trim()) throw Error('Enter a meeting title.');
   if (!existing && events.some(e => e.client === c.id)) throw Error('This client already has a meeting. Open their existing meeting to reschedule.');
@@ -552,14 +612,14 @@ function simulateInquiry() {
 async function streamDraft(id) {
   const c = find(id);
   if (!c) return;
-  const token = ++streamToken;
+  const token = streamToken;
   c.streaming = true;
   c.draft = '';
   render();
   const phases = ['Reading the message…', 'Reading budget, timeline and service line…', 'Checking your calendar for open slots…', `Drafting in your ${settings.tone.toLowerCase()} tone…`];
   for (const phase of phases) {
     if (token !== streamToken) return;
-    const el = $('#stream-status');
+    const el = selected === c.id && view === 'inbox' ? $('#stream-status') : null;
     if (el) el.textContent = phase;
     await sleep(calm() ? 0 : 430);
   }
@@ -568,7 +628,7 @@ async function streamDraft(id) {
     for (let i = 0; i < text.length; i += 3) {
       if (token !== streamToken) return;
       c.draft = text.slice(0, i + 3);
-      if (selected === c.id) {
+      if (selected === c.id && view === 'inbox') {
         const ta = $('#reply-text');
         if (ta) { ta.value = c.draft; ta.scrollTop = ta.scrollHeight; }
       }
@@ -578,7 +638,7 @@ async function streamDraft(id) {
   if (token !== streamToken) return;
   c.draft = text;
   c.streaming = false;
-  render();
+  if (selected === c.id && view === 'inbox') render(); else save();
 }
 
 /* ---------- real side effects: a mail handoff and a calendar file ---------- */
@@ -601,47 +661,56 @@ function download(name, text, type) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+function easternInstant(date, time) {
+  const [year, month, day] = date.split('-').map(Number), [hour, minute] = time.split(':').map(Number);
+  const target = Date.UTC(year, month - 1, day, hour, minute);
+  let instant = target;
+  for (let i = 0; i < 3; i++) {
+    const p = easternParts(new Date(instant));
+    const represented = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+    instant += target - represented;
+  }
+  return new Date(instant);
+}
+const icsStamp = date => date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+const icsText = value => String(value).replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,');
+function calendarFile(e, c) {
+  const start = easternInstant(e.date, e.time), end = new Date(start.getTime() + e.duration * 60000);
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Relay Prototype//EN', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT',
+    `UID:relay-${e.id}-${e.date}@relay.prototype`, `DTSTAMP:${icsStamp(new Date())}`,
+    `DTSTART:${icsStamp(start)}`, `DTEND:${icsStamp(end)}`,
+    `SUMMARY:${icsText(e.title + (c ? ' — ' + c.company : ''))}`,
+    `DESCRIPTION:${e.duration}-minute video call booked in the Relay prototype.`, 'END:VEVENT', 'END:VCALENDAR'];
+  // Fold long UTF-8 content lines without splitting a code point.
+  const encoder = new TextEncoder();
+  return lines.map(line => {
+    let result = '', bytes = 0;
+    for (const ch of line) { const size = encoder.encode(ch).length; if (bytes + size > 75) { result += '\r\n '; bytes = 1; } result += ch; bytes += size; }
+    return result;
+  }).join('\r\n') + '\r\n';
+}
 function icsFor(eventId) {
   const e = events.find(x => x.id === Number(eventId));
   if (!e) return;
-  const c = find(e.client);
-  const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-  const start = `${e.date.replace(/-/g, '')}T${e.time.replace(':', '')}00`;
-  const endMin = Number(e.time.slice(0, 2)) * 60 + Number(e.time.slice(3)) + e.duration;
-  const end = `${e.date.replace(/-/g, '')}T${pad(Math.floor(endMin / 60))}${pad(endMin % 60)}00`;
-  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Relay Prototype//EN', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT',
-    `UID:relay-${e.id}-${e.date}@relay.prototype`, `DTSTAMP:${stamp}`, `DTSTART:${start}`, `DTEND:${end}`,
-    `SUMMARY:${e.title}${c ? ' — ' + c.company : ''}`,
-    `DESCRIPTION:${e.duration}-minute video call booked in the Relay prototype.`,
-    'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
-  download(`relay-${e.date}-${e.time.replace(':', '')}.ics`, ics, 'text/calendar');
-  toast('Calendar file downloaded.');
+  download(`relay-${e.date}-${e.time.replace(':', '')}.ics`, calendarFile(e, find(e.client)), 'text/calendar');
+  toast('Calendar file downloaded with Eastern time converted to UTC.');
 }
 function exportWorkspace() {
   download(`relay-workspace-${TODAY}.json`, JSON.stringify({ day: TODAY, clients, events, settings, roi, activity, responses, nextClient, nextEvent }, null, 2), 'application/json');
   toast('Workspace exported.');
 }
 function importWorkspace(file) {
+  if (file.size > 2 * 1024 * 1024) { toast('Choose a Relay export smaller than 2 MB.'); return; }
   const reader = new FileReader();
+  reader.onerror = () => toast('The file could not be read. Your workspace is unchanged.');
   reader.onload = () => {
-    try {
-      const s = JSON.parse(String(reader.result));
-      if (!Array.isArray(s.clients) || !s.clients.length) throw Error('missing clients');
-      clients = s.clients;
-      events = Array.isArray(s.events) ? s.events : [];
-      settings = { ...settings, ...s.settings };
-      roi = { ...roi, ...s.roi };
-      activity = Array.isArray(s.activity) ? s.activity : [];
-      responses = Array.isArray(s.responses) && s.responses.length ? s.responses : responses;
-      nextClient = Number(s.nextClient) || clients.length + 1;
-      nextEvent = Number(s.nextEvent) || events.length + 1;
-      selected = clients[0].id;
-      log('Workspace imported');
-      render();
-      toast('Workspace imported.');
-    } catch (_) {
-      toast('That file isn’t a Relay workspace export.');
-    }
+    let data;
+    try { data = decodeWorkspace(JSON.parse(String(reader.result))); }
+    catch (_) { toast('That file is not a valid Relay export. Your workspace is unchanged.'); return; }
+    applyWorkspace(data);
+    log('Workspace imported');
+    render();
+    toast('Workspace imported.');
   };
   reader.readAsText(file);
 }
@@ -659,7 +728,7 @@ document.addEventListener('click', e => {
     try {
       const r = approveReply(d.send, $('#reply-text').value);
       toast(r.respondedSec != null
-        ? `Approved in ${Math.round(r.respondedSec)} seconds. The B2B average is ${BENCH.industryHours} hours. No real email was sent.`
+        ? `Approved in ${Math.round(r.respondedSec)} seconds in this demo. No real email was sent.`
         : 'Reply recorded. No real email was sent.');
     } catch (err) { toast(err.message); }
     return;
@@ -717,11 +786,13 @@ document.addEventListener('input', e => {
   }
   if (t.id === 'reply-text') {
     const c = find(selected);
-    if (c && !c.streaming) c.draft = t.value;
+    if (c && !c.streaming) { c.draft = t.value; save(); }
     return;
   }
   if (t.dataset.roi) {
-    roi[t.dataset.roi] = t.value === '' ? 0 : Number(t.value);
+    const bounds = { inquiries: [0,500], fee: [0,1000000], close: [0,100], respondHours: [0,336], price: [1,10000] };
+    const [min, max] = bounds[t.dataset.roi];
+    roi[t.dataset.roi] = Math.min(max, Math.max(min, Number(t.value) || min));
     paintImpact();
     save();
   }

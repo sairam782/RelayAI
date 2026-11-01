@@ -47,9 +47,9 @@
     render();
     if (running) raf = requestAnimationFrame(tick);
   }
-  function start() { if (elapsed >= duration) elapsed = 0; running = true; lastTick = performance.now(); render(); raf = requestAnimationFrame(tick); }
+  function start() { cancelAnimationFrame(raf); if (elapsed >= duration) elapsed = 0; running = true; lastTick = performance.now(); render(); raf = requestAnimationFrame(tick); }
   play.addEventListener('click', () => running ? pause() : start());
-  range.addEventListener('input', () => { elapsed = Number(range.value); lastTick = performance.now(); if (elapsed >= duration) running = false; render(); });
+  range.addEventListener('input', () => { elapsed = Number(range.value); lastTick = performance.now(); if (elapsed >= duration) { running = false; cancelAnimationFrame(raf); } render(); });
   chapters.forEach((button, index) => button.addEventListener('click', () => { pause(); elapsed = index * frameDuration; render(); }));
   player.querySelector('[data-demo-restart]').addEventListener('click', () => { pause(); elapsed = 0; render(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && running) pause(); });

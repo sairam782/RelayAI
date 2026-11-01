@@ -6,10 +6,7 @@ Relay reads every inbound inquiry, drafts the reply in the owner's voice, offers
 that are actually free, and waits for approval before anything moves. This repository is
 the working prototype plus its product overview page.
 
-**The wedge:** the average B2B inquiry waits ~42 hours for a reply, 78% of buyers hire
-whoever answers first, and up to 73% of inbound leads are never contacted at all. The
-firms with the worst response times — 84% of the 50,025 US marketing-consulting
-establishments have fewer than five staff — are the ones no vendor is building for.
+**The starting hypothesis:** a focused inquiry-to-follow-up workflow can help small U.S. consultancies and agencies spend less time coordinating new business. Competitors already serve parts of this market. Validate time saved, qualified meetings, and willingness to pay through interviews and pilots.
 
 ## Run locally
 
@@ -40,15 +37,15 @@ The landing page opens with a silent, 40-second animated walkthrough of an inqui
 ## What the prototype does
 
 - **Reads an inbound message** for budget, timeline, service line, intent and fit against
-  your minimum project size, and shows what it extracted with a confidence score.
+  your minimum project size, and shows the extracted details as a rule-based reading.
 - **Drafts a reply** in one of three tones that names their goal, handles the budget
   question honestly, skips questions the message already answered, and offers two open
-  slots from the real calendar state.
+  future slots from the sample calendar state, using Eastern time.
 - **Books meetings** with weekday and business-hour validation, conflict detection and
   one-meeting-per-client enforcement.
 - **Tracks a pipeline** across six stages with weighted value, win rate and a stage funnel.
 - **Queues follow-ups** with snooze, and keeps an activity log.
-- **Models the revenue impact** of your own response time against published benchmarks.
+- **Explores a business-case scenario** using explicitly stated, unvalidated recovery assumptions. The outputs are additional gross project fees, not profit or measured product results.
 - **Hands off for real**: `mailto:` into your mail client, `.ics` download for a booking,
   and JSON export/import of the whole workspace.
 
@@ -60,10 +57,9 @@ Reset demo clears it.
 Stated plainly, because the prototype is shown to people making decisions:
 
 - Drafting is a **deterministic rules engine running in the browser**, not a live model.
-  `analyze()` and `draftFor()` in `dist/app.js` are the seam — production swaps `draftFor`
-  for a model call behind the same approval gate, with the same inputs and outputs.
+  `analyze()` and `draftFor()` in `dist/app.js` isolate the drafting logic. Production also requires secure backend integrations, background processing, and evaluated model behavior behind the approval gate.
 - No email is sent, no calendar is connected, no account system exists.
-- All client data is fictional. Nothing leaves the browser.
+- Seed client data is fictional. Workspace data stays in the browser unless you explicitly export it or open a draft in your mail app. Google Fonts is fetched externally.
 - Client messages are treated as data, never as instructions — an inbound email cannot
   cause Relay to act. That property has to survive the move to a real model.
 
@@ -79,15 +75,14 @@ Stated plainly, because the prototype is shown to people making decisions:
 - `scripts/serve.js` — dependency-free local server
 - `.openai/hosting.json` — existing Sites project identity
 
-## Benchmark sources
+## Validation
 
-Directional secondary aggregations, to be replaced with primary citations:
+```sh
+node scripts/checks.js
+```
 
-- Lead response time and first-responder share — <https://greetnow.com/blog/lead-response-time-statistics>, <https://leadresponse.co/blog/speed-to-lead-statistics>
-- US marketing-consulting establishment counts — <https://www.anythingresearch.com/industry/Marketing-Consulting-Services.htm>
-- Competitor positioning and funding — <https://www.11x.ai/guides/artisan-vs-regie-ai-vs-11x>
-- Incumbent pricing — HoneyBook, Dubsado and Moxie public pricing pages, 2026
+The dependency-free checks cover workspace validation, draft recovery and persistence, concurrent simulated inquiries, booking conflicts, timezones and daylight saving time, calendar exports, and business-case bounds. The local server applies the headers from `vercel.json` so browser checks use the deployment CSP.
 
-The impact model is deliberately conservative: it assumes faster replies recover only the
-share of inbound that research attributes to waiting, and applies your own close rate to
-that share. It does not assume the close rate itself improves.
+## Business-case assumptions
+
+The Impact view is illustrative. Its delay-loss tiers (0%, 3%, 8%, 14%, 18%) are product assumptions, not research-derived coefficients. It assumes all delayed inquiries are recovered and applies the same close rate to reachable inquiries in both scenarios. Validate the assumptions before using the outputs to make a business decision.
